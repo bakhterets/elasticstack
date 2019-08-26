@@ -1,0 +1,107 @@
+version: '3.7'
+
+networks:
+  stack:
+
+services:
+  nginx-ldap-auth:
+    build: ./nginx-ldap-auth
+    container_name: nginx-ldap-auth
+    restart: unless-stopped
+    ports:
+      - "8888:8888"
+    networks:
+      - stack
+  nginx:
+    image: nginx:latest
+    container_name: nginx
+    restart: unless-stopped
+    volumes:
+      - /dockervolumes/storage/nginx:/etc/nginx
+    ports:
+      - "80:80"
+    networks:
+      - stack
+    depends_on:
+      - nginx-ldap-auth
+  es01:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.3.0
+    container_name: es01
+    restart: unless-stopped
+    environment:
+      - node.name=es01
+      - discovery.seed_hosts=es02
+      - cluster.initial_master_nodes=es01,es02
+      - cluster.name=hosting-cluster
+      - cluster.routing.allocation.disk.threshold_enabled=true
+      - cluster.routing.allocation.disk.watermark.low=10gb
+      - cluster.routing.allocation.disk.watermark.high=5gb
+      - cluster.routing.allocation.disk.watermark.flood_stage=1gb
+      - cluster.info.update.interval=1m
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xmx2g -Xms2g"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - /dockervolumes/storage/elastic/data/es01:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    networks:
+      - stack
+  es02:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.3.0
+    container_name: es02
+    restart: unless-stopped
+    environment:
+      - node.name=es02
+      - discovery.seed_hosts=es01
+      - cluster.initial_master_nodes=es01,es02
+      - cluster.name=hosting-cluster
+      - cluster.routing.allocation.disk.threshold_enabled=true
+      - cluster.routing.allocation.disk.watermark.low=10gb
+      - cluster.routing.allocation.disk.watermark.high=5gb
+      - cluster.routing.allocation.disk.watermark.flood_stage=1gb
+      - cluster.info.update.interval=1m
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xmx2g -Xms2g"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - /dockervolumes/storage/elastic/data/es02:/usr/share/elasticsearch/data
+    networks:
+      - stack
+  kibana:
+    image: docker.elastic.co/kibana/kibana:7.3.0
+    container_name: kibana
+    restart: unless-stopped
+    volumes:
+      - /dockervolumes/storage/kibana/config/kibana.yml:/usr/share/kibana/config/kibana.yml:ro
+    ulimits:
+        nproc: 65535
+        memlock:
+           soft: -1
+           hard: -1
+    depends_on:
+      - es01
+    ports:
+      - "5601:5601"
+    networks:
+      - stack
+#  logstash:
+#    image: docker.elastic.co/logstash/logstash:7.3.0
+#    container_name: logstash
+#    restart: unless-stopped
+#    ports:
+#      - "9600:9600"
+#      - "5044:5044" 
+#    environment:
+#      LS_JAVA_OPTS: "-Xmx2g -Xms512m"
+#    depends_on:
+#      - es01
+#    networks:
+#      - stack
